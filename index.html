@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5ff">
+  <meta name="description" content="Turn your study guide into a Blooket-ready quiz spreadsheet.">
+  <title>StudySpark — study guide to Blooket</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="StudySpark home">
+        <span class="brand-mark" aria-hidden="true">✳</span>
+        <span>study<span class="brand-accent">spark</span></span>
+      </a>
+      <div class="topbar-right">
+        <span class="model-chip"><span class="status-dot"></span> Nemotron 3 Super</span>
+        <button class="account-button" id="accountButton" type="button" hidden>
+          <span class="avatar" id="userAvatar">S</span><span id="userNameLabel">Account</span><span class="chevron">⌄</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section id="authView" class="auth-view" aria-labelledby="authTitle">
+        <div class="auth-art" aria-hidden="true">
+          <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+          <div class="art-card art-card-main"><span class="art-emoji">✍️</span><span class="art-line wide"></span><span class="art-line"></span><span class="art-line short"></span><span class="art-check">✓</span></div>
+          <div class="art-card art-card-small"><span class="art-emoji">⚡</span><b>Ready to play</b><span class="art-mini-bars"><i></i><i></i><i></i><i></i></span></div>
+          <span class="sparkle sparkle-a">✦</span><span class="sparkle sparkle-b">✧</span>
+        </div>
+        <div class="auth-card">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR STUDY SIDEKICK</div>
+          <h1 id="authTitle">Learn it.<br><span>Play it.</span></h1>
+          <p class="auth-subtitle" id="authSubtitle">Sign in to turn your notes into a Blooket-ready quiz.</p>
+          <form id="authForm" novalidate>
+            <label class="field-label" for="authUsername">Username</label>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">◎</span><input id="authUsername" name="username" autocomplete="username" required minlength="3" maxlength="24" placeholder="Pick a username"></div>
+            <label class="field-label field-label-spaced" for="authPassword">Password</label>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters"><button class="password-toggle" type="button" id="passwordToggle" aria-label="Show password">Show</button></div>
+            <p class="form-message" id="authMessage" role="alert"></p>
+            <button class="button button-primary auth-submit" id="authSubmit" type="submit">Sign in <span>→</span></button>
+          </form>
+          <p class="auth-switch"><span id="authSwitchText">New around here?</span> <button type="button" id="authSwitch">Create an account</button></p>
+          <div class="local-note"><span aria-hidden="true">🔒</span><span>Browser-only accounts. Your account and key stay on this device.</span></div>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace" hidden>
+        <div class="hero-row">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-dot"></span> NOTES IN, KNOWLEDGE OUT</div>
+            <h1>Make your study guide<br> <span>game-ready.</span></h1>
+            <p class="hero-copy">Drop in your material. Get a thoughtful, Blooket-ready quiz in minutes.</p>
+          </div>
+          <div class="hero-sticker" aria-hidden="true"><span>✦</span><b>STUDY<br>SMARTER</b><i>✳</i></div>
+        </div>
+
+        <div class="layout-grid">
+          <div class="main-column">
+            <section class="panel source-panel" aria-labelledby="sourceTitle">
+              <div class="panel-heading">
+                <div class="step-number">01</div>
+                <div><h2 id="sourceTitle">Add your study guide</h2><p>Upload a file, snap a photo, or paste your notes.</p></div>
+                <span class="step-tag">YOUR MATERIAL</span>
+              </div>
+              <label class="upload-zone" id="dropZone" for="fileInput" tabindex="0">
+                <input id="fileInput" type="file" accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff, text/plain, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/*" multiple>
+                <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 21V5m0 0-6 6m6-6 6 6M6 20v6h20v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="upload-title">Drag a file here <b>or browse</b></span>
+                <span class="upload-hint">PDF, DOCX, TXT, or image · multiple files supported</span>
+                <span class="upload-footnote">Photos from your library work too</span>
+              </label>
+              <div id="fileList" class="file-list" aria-live="polite"></div>
+              <div class="or-divider"><span></span><i>OR PASTE YOUR NOTES</i><span></span></div>
+              <label class="sr-only" for="studyText">Study guide text</label>
+              <textarea id="studyText" class="study-text" placeholder="Paste your study guide here…&#10;&#10;The more detail you include, the more complete your quiz can be." rows="7"></textarea>
+              <div class="text-meta"><span id="wordCount">0 words</span><span id="sourceStatus">Your guide is only used to make this quiz.</span></div>
+            </section>
+
+            <section class="panel key-panel" aria-labelledby="keyTitle">
+              <div class="panel-heading panel-heading-compact">
+                <div class="step-number step-number-lilac">02</div>
+                <div><h2 id="keyTitle">Connect your NVIDIA key</h2><p>Used to generate your quiz with Nemotron 3 Super.</p></div>
+                <span class="key-lock" aria-label="Stored in this browser">⌑</span>
+              </div>
+              <div class="key-row">
+                <div class="input-wrap key-input-wrap"><span class="input-icon" aria-hidden="true">✳</span><input id="apiKeyInput" type="password" autocomplete="off" placeholder="Paste your NVIDIA NIM API key"><button class="password-toggle" type="button" id="keyToggle" aria-label="Show API key">Show</button></div>
+                <button class="button button-outline" id="saveKeyButton" type="button">Save key</button>
+              </div>
+              <div class="key-help"><span>Get a key at <a href="https://build.nvidia.com/" target="_blank" rel="noreferrer">build.nvidia.com ↗</a></span><span class="key-saved" id="keySavedStatus">Not saved</span></div>
+              <p class="security-note"><span>ⓘ</span> Stored in this browser only, not encrypted. Anyone with access to this device or page storage may be able to see it.</p>
+            </section>
+
+            <div class="generate-row">
+              <div class="generation-hint"><span class="hint-icon">✦</span><span><b>Guide-only questions</b><br>Outside sources can clarify; they won't add quiz topics.</span></div>
+              <label class="reference-toggle"><input id="referenceLookup" type="checkbox" checked><span><b>Find references</b><small>Search topic keywords</small></span></label>
+              <button id="generateButton" type="button" class="button button-generate"><span class="generate-spark">✦</span> Create my quiz <span class="button-arrow">→</span></button>
+            </div>
+            <div id="progressArea" class="progress-area" hidden aria-live="polite"><div class="progress-spinner"></div><div><b id="progressTitle">Getting your notes ready…</b><span id="progressDetail">This can take a little while.</span></div></div>
+            <p id="generationError" class="generation-error" role="alert" hidden></p>
+          </div>
+
+          <aside class="side-column">
+            <section class="side-card how-card">
+              <div class="side-card-icon">✧</div><h3>From notes to<br>game night</h3>
+              <ol class="how-list"><li><span>1</span><div><b>Share what you learned</b><p>We only quiz from your guide.</p></div></li><li><span>2</span><div><b>Get balanced questions</b><p>Four thoughtful choices, one right answer.</p></div></li><li><span>3</span><div><b>Download and import</b><p>Open the spreadsheet in Google Sheets, then use your Blooket template.</p></div></li></ol>
+              <div class="side-card-footer"><span>Made for curious minds</span><span>✦</span></div>
+            </section>
+            <section class="side-card format-card">
+              <div class="format-top"><span class="format-badge">SHEET PREVIEW</span><span class="format-icon">▦</span></div>
+              <div class="mini-sheet" aria-hidden="true"><div class="mini-row mini-head"><i>Question</i><i>Answer 1</i><i>Answer 2</i></div><div class="mini-row"><i>What is…?</i><i>One choice</i><i>Another</i></div><div class="mini-row"><i>Why does…?</i><i>Because…</i><i>Although…</i></div><div class="mini-row"><i>Which one…?</i><i>First</i><i>Second</i></div></div>
+              <p>Clean rows, the exact Blooket column order, and <b>no header row.</b></p>
+            </section>
+          </aside>
+        </div>
+
+        <section id="resultsSection" class="results-section" hidden aria-labelledby="resultsTitle">
+          <div class="results-heading">
+            <div><div class="eyebrow"><span class="eyebrow-dot"></span> YOUR QUIZ IS READY</div><h2 id="resultsTitle">A little review goes a long way.</h2><p id="resultsSummary">Check your questions before you download.</p></div>
+            <div class="download-actions"><button id="csvButton" class="button button-outline" type="button">Download CSV</button><button id="xlsxButton" class="button button-download" type="button"><span>↓</span> Download for Google Sheets</button></div>
+          </div>
+          <div id="sourcesBox" class="sources-box" hidden><div class="sources-title"><span>↗</span><div><b>Reference lookups</b><p>Candidate background sources used to check context. Review these before relying on them.</p></div></div><div id="sourceCards" class="source-cards"></div></div>
+          <div class="table-wrap"><table id="quizTable"><caption class="sr-only">Blooket quiz preview, without column headings in the downloaded file</caption><thead><tr><th>Question text</th><th>Answer 1</th><th>Answer 2</th><th>Answer 3</th><th>Answer 4</th><th>Time limit</th><th>Correct answer number</th></tr></thead><tbody id="quizRows"></tbody></table></div>
+          <div class="table-footer"><span><span class="table-dot"></span> Gridlines show the exact spreadsheet columns</span><span>300 seconds per question · Correct answer is a number</span></div>
+          <div class="results-bottom"><p>Before importing, compare the quiz with your original guide.</p><button id="newQuizButton" type="button" class="text-button">Start over <span>↗</span></button></div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer"><span>© StudySpark</span><span>Built to help your hard work stick.</span><button type="button" id="privacyButton">Privacy & storage</button></footer>
+  </div>
+
+  <div id="accountMenu" class="account-menu" hidden><div class="menu-user"><span class="avatar" id="menuAvatar">S</span><div><b id="menuUsername">Student</b><span>Local account</span></div></div><button id="signOutButton" type="button">Sign out <span>↗</span></button></div>
+  <dialog id="noticeDialog" class="notice-dialog"><div class="dialog-top"><span class="dialog-icon">ⓘ</span><button class="dialog-close" id="dialogClose" type="button" aria-label="Close">×</button></div><h2>Privacy & storage</h2><p>This is a static GitHub Pages app. Accounts and NVIDIA keys are stored in this browser only; they do not sync between devices. Passwords are salted and hashed locally, but this is not server-side authentication. Your saved NVIDIA key is not encrypted, and requests send it directly from your browser to NVIDIA.</p><p>Study-guide text is sent to NVIDIA to create your quiz. If “Find references” is checked, a few extracted topic keywords (not your full guide) are sent to Wikipedia's public API for background context. Avoid shared devices and never enter a key you are not comfortable storing in local browser storage.</p><p>For a public app with real accounts and protected API keys, add a trusted backend before deployment.</p><button class="button button-primary dialog-done" id="dialogDone" type="button">Got it</button></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
