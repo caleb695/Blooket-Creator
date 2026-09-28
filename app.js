@@ -118,12 +118,8 @@
     const username = els.authUsername.value.trim();
     const password = els.authPassword.value;
     const normalized = username.toLowerCase();
-    if (!/^[a-zA-Z0-9_-]{3,24}$/.test(username)) {
-      setAuthMessage('Use 3–24 letters, numbers, underscores, or hyphens for your username.');
-      return;
-    }
-    if (password.length < 8) {
-      setAuthMessage('Your password needs at least 8 characters.');
+    if (!username) {
+      setAuthMessage('Enter a username.');
       return;
     }
     els.authSubmit.disabled = true;
@@ -171,6 +167,8 @@
     updateWordCount();
     els.apiKeyInput.value = '';
     clearResults();
+    els.authPassword.value = '';
+    setAuthMode(false);
     renderSignedIn();
   }
 
@@ -511,7 +509,7 @@
       els.resultsTitle.textContent = `${rows.length} questions, ready to review.`;
       els.resultsSummary.textContent = uneven
         ? 'Check the answer choices for balance, then download your Blooket-ready sheet.'
-        : 'Four choices per question · 300 seconds each · no spreadsheet headers.';
+        : 'Four choices per question · 300 seconds each · filled into the official Blooket template.';
       els.resultsSection.hidden = false;
       els.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
@@ -527,19 +525,177 @@
     return generatedRows.map((row) => [row.question, ...row.answers, 300, row.correctAnswer]);
   }
 
-  function downloadXlsx() {
-    if (!generatedRows.length) return;
-    if (!window.XLSX) {
-      toast('Spreadsheet tools did not load. Use Download CSV instead.');
-      return;
+  // Blooket's official import template (uploaded to this repo). The download is
+  // built by filling in this exact file so its logo, header row, colors, borders,
+  // column widths, and sheet name are preserved.
+  const TEMPLATE_URL = 'Blooket_Spreadsheet_Import_Template.xlsx';
+  const TEMPLATE_SHEET = 'xl/worksheets/sheet1.xml';
+  const TEMPLATE_FIRST_ROW = 3; // Row 1 = Blooket logo, row 2 = Blooket's column headings.
+  const TEMPLATE_COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  // Style ids taken from the template's own body rows (odd rows white, even rows shaded).
+  const TEMPLATE_STYLES = {
+    number: '11',
+    text: { white: '22', shaded: '21' },
+    numeric: { white: '20', shaded: '23' }
+  };
+  let templateBufferPromise = null;
+
+  function loadTemplate() {
+    if (!templateBufferPromise) {
+      templateBufferPromise = fetch(TEMPLATE_URL, { cache: 'no-cache' }).then((response) => {
+        if (!response.ok) throw new Error(`Template request failed (${response.status}).`);
+        return response.arrayBuffer();
+      }).catch((error) => { templateBufferPromise = null; throw error; });
     }
+    return templateBufferPromise;
+  }
+
+  function cleanCellText(value) {
+    // Strip characters that are illegal in XML 1.0 so the workbook always opens.
+    return String(value).replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, '');
+  }
+
+  function buildTemplateSheet(xmlText, rows) {
+    const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('The Blooket template could not be read.');
+    const sheetData = doc.getElementsByTagNameNS(SHEET_NS, 'sheetData')[0];
+    if (!sheetData) throw new Error('The Blooket template is missing its sheet data.');
+
+    const rowMap = new Map();
+    Array.from(sheetData.getElementsByTagNameNS(SHEET_NS, 'row')).forEach((row) => rowMap.set(Number(row.getAttribute('r')), row));
+
+    const getRow = (rowNumber) => {
+      if (rowMap.has(rowNumber)) return rowMap.get(rowNumber);
+      const row = doc.createElementNS(SHEET_NS, 'row');
+      row.setAttribute('r', String(rowNumber));
+      const next = Array.from(rowMap.keys()).sort((a, b) => a - b).find((key) => key > rowNumber);
+      sheetData.insertBefore(row, next ? rowMap.get(next) : null);
+      rowMap.set(rowNumber, row);
+      return row;
+    };
+
+    const getCell = (row, ref) => {
+      const cells = Array.from(row.getElementsByTagNameNS(SHEET_NS, 'c'));
+      const existing = cells.find((cell) => cell.getAttribute('r') === ref);
+      if (existing) return existing;
+      const cell = doc.createElementNS(SHEET_NS, 'c');
+      cell.setAttribute('r', ref);
+      const colIndex = (letters) => letters.replace(/\d+/g, '').split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+      const after = cells.find((item) => colIndex(item.getAttribute('r')) > colIndex(ref));
+      row.insertBefore(cell, after || null);
+      return cell;
+    };
+
+    const clearCell = (cell) => {
+      while (cell.firstChild) cell.removeChild(cell.firstChild);
+      cell.removeAttribute('t');
+    };
+
+    const setText = (cell, value, style) => {
+      clearCell(cell);
+      cell.setAttribute('s', style);
+      cell.setAttribute('t', 'inlineStr');
+      const is = doc.createElementNS(SHEET_NS, 'is');
+      const t = doc.createElementNS(SHEET_NS, 't');
+      t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+      t.textContent = cleanCellText(value);
+      is.appendChild(t);
+      cell.appendChild(is);
+    };
+
+    const setNumber = (cell, value, style) => {
+      clearCell(cell);
+      cell.setAttribute('s', style);
+      const v = doc.createElementNS(SHEET_NS, 'v');
+      v.textContent = String(value);
+      cell.appendChild(v);
+    };
+
+    // Remove the template's example questions ("What's 2 + 2?" etc.) and any
+    // leftover answers in the question area, keeping the pre-numbered "Question #" column.
+    rowMap.forEach((row, rowNumber) => {
+      if (rowNumber < TEMPLATE_FIRST_ROW) return;
+      Array.from(row.getElementsByTagNameNS(SHEET_NS, 'c')).forEach((cell) => {
+        const col = (cell.getAttribute('r') || '').replace(/\d+/g, '');
+        if (TEMPLATE_COLUMNS.includes(col) && col !== 'A' && (cell.firstChild || cell.hasAttribute('t'))) {
+          clearCell(cell);
+          const shaded = rowNumber % 2 === 0;
+          cell.setAttribute('s', (col === 'G' || col === 'H') ? TEMPLATE_STYLES.numeric[shaded ? 'shaded' : 'white'] : TEMPLATE_STYLES.text[shaded ? 'shaded' : 'white']);
+        }
+      });
+    });
+
+    rows.forEach((row, index) => {
+      const rowNumber = TEMPLATE_FIRST_ROW + index;
+      const rowEl = getRow(rowNumber);
+      const tone = rowNumber % 2 === 0 ? 'shaded' : 'white';
+      const values = [row.question, ...row.answers];
+      setNumber(getCell(rowEl, `A${rowNumber}`), index + 1, TEMPLATE_STYLES.number);
+      ['B', 'C', 'D', 'E', 'F'].forEach((col, i) => setText(getCell(rowEl, `${col}${rowNumber}`), values[i], TEMPLATE_STYLES.text[tone]));
+      setNumber(getCell(rowEl, `G${rowNumber}`), 300, TEMPLATE_STYLES.numeric[tone]);
+      setNumber(getCell(rowEl, `H${rowNumber}`), row.correctAnswer, TEMPLATE_STYLES.numeric[tone]);
+    });
+
+    // Keep the <dimension> covering every used row.
+    const dimension = doc.getElementsByTagNameNS(SHEET_NS, 'dimension')[0];
+    const maxRow = Math.max(...rowMap.keys());
+    if (dimension) dimension.setAttribute('ref', `A1:L${maxRow}`);
+
+    let output = new XMLSerializer().serializeToString(doc);
+    if (!output.startsWith('<?xml')) output = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + output;
+    return output;
+  }
+
+  async function buildTemplateWorkbook(rows) {
+    if (!window.JSZip) throw new Error('Spreadsheet tools did not load.');
+    const zip = await window.JSZip.loadAsync(await loadTemplate());
+    const sheetFile = zip.file(TEMPLATE_SHEET);
+    if (!sheetFile) throw new Error('The Blooket template is missing its first sheet.');
+    zip.file(TEMPLATE_SHEET, buildTemplateSheet(await sheetFile.async('string'), rows));
+    return zip.generateAsync({
+      type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 },
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+  }
+
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadPlainXlsx(filename) {
     const sheet = XLSX.utils.aoa_to_sheet(getSheetRows());
     sheet['!cols'] = [{ wch: 48 }, { wch: 36 }, { wch: 36 }, { wch: 36 }, { wch: 36 }, { wch: 13 }, { wch: 23 }];
-    sheet['!sheetViews'] = [{ showGridLines: true }];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, 'Blooket Quiz');
-    const safeName = `studyspark-blooket-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(workbook, safeName, { bookType: 'xlsx', compression: true });
+    XLSX.writeFile(workbook, filename, { bookType: 'xlsx', compression: true });
+  }
+
+  async function downloadXlsx() {
+    if (!generatedRows.length) return;
+    const filename = `studyspark-blooket-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    els.xlsxButton.disabled = true;
+    try {
+      saveBlob(await buildTemplateWorkbook(generatedRows), filename);
+      toast('Downloaded on the Blooket import template.');
+    } catch (error) {
+      console.error(error);
+      if (window.XLSX) {
+        downloadPlainXlsx(filename);
+        toast('Could not load the Blooket template, so a plain sheet was downloaded instead.');
+      } else {
+        toast('Spreadsheet tools did not load. Use Download CSV instead.');
+      }
+    } finally {
+      els.xlsxButton.disabled = false;
+    }
   }
 
   function downloadCsv() {
@@ -547,12 +703,7 @@
     const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
     const csv = getSheetRows().map((row) => row.map(quote).join(',')).join('\r\n');
     const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `studyspark-blooket-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, `studyspark-blooket-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   function resetQuiz() {

@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -45,9 +46,9 @@
           <p class="auth-subtitle" id="authSubtitle">Sign in to turn your notes into a Blooket-ready quiz.</p>
           <form id="authForm" novalidate>
             <label class="field-label" for="authUsername">Username</label>
-            <div class="input-wrap"><span class="input-icon" aria-hidden="true">◎</span><input id="authUsername" name="username" autocomplete="username" required minlength="3" maxlength="24" placeholder="Pick a username"></div>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">◎</span><input id="authUsername" name="username" autocomplete="username" required placeholder="Pick a username"></div>
             <label class="field-label field-label-spaced" for="authPassword">Password</label>
-            <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters"><button class="password-toggle" type="button" id="passwordToggle" aria-label="Show password">Show</button></div>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="authPassword" name="password" type="password" autocomplete="current-password" placeholder="Enter a password"><button class="password-toggle" type="button" id="passwordToggle" aria-label="Show password">Show</button></div>
             <p class="form-message" id="authMessage" role="alert"></p>
             <button class="button button-primary auth-submit" id="authSubmit" type="submit">Sign in <span>→</span></button>
           </form>
@@ -114,13 +115,13 @@
           <aside class="side-column">
             <section class="side-card how-card">
               <div class="side-card-icon">✧</div><h3>From notes to<br>game night</h3>
-              <ol class="how-list"><li><span>1</span><div><b>Share what you learned</b><p>We only quiz from your guide.</p></div></li><li><span>2</span><div><b>Get balanced questions</b><p>Four thoughtful choices, one right answer.</p></div></li><li><span>3</span><div><b>Download and import</b><p>Open the spreadsheet in Google Sheets, then use your Blooket template.</p></div></li></ol>
+              <ol class="how-list"><li><span>1</span><div><b>Share what you learned</b><p>We only quiz from your guide.</p></div></li><li><span>2</span><div><b>Get balanced questions</b><p>Four thoughtful choices, one right answer.</p></div></li><li><span>3</span><div><b>Download and import</b><p>Open it in Google Sheets or upload it straight to Blooket's spreadsheet import.</p></div></li></ol>
               <div class="side-card-footer"><span>Made for curious minds</span><span>✦</span></div>
             </section>
             <section class="side-card format-card">
               <div class="format-top"><span class="format-badge">SHEET PREVIEW</span><span class="format-icon">▦</span></div>
               <div class="mini-sheet" aria-hidden="true"><div class="mini-row mini-head"><i>Question</i><i>Answer 1</i><i>Answer 2</i></div><div class="mini-row"><i>What is…?</i><i>One choice</i><i>Another</i></div><div class="mini-row"><i>Why does…?</i><i>Because…</i><i>Although…</i></div><div class="mini-row"><i>Which one…?</i><i>First</i><i>Second</i></div></div>
-              <p>Clean rows, the exact Blooket column order, and <b>no header row.</b></p>
+              <p>Filled into the <b>official Blooket import template</b> — same logo, headings, colors, and column order.</p>
             </section>
           </aside>
         </div>
@@ -128,10 +129,10 @@
         <section id="resultsSection" class="results-section" hidden aria-labelledby="resultsTitle">
           <div class="results-heading">
             <div><div class="eyebrow"><span class="eyebrow-dot"></span> YOUR QUIZ IS READY</div><h2 id="resultsTitle">A little review goes a long way.</h2><p id="resultsSummary">Check your questions before you download.</p></div>
-            <div class="download-actions"><button id="csvButton" class="button button-outline" type="button">Download CSV</button><button id="xlsxButton" class="button button-download" type="button"><span>↓</span> Download for Google Sheets</button></div>
+            <div class="download-actions"><button id="csvButton" class="button button-outline" type="button" title="Plain rows only, no headers — handy for copy and paste">Download CSV</button><button id="xlsxButton" class="button button-download" type="button"><span>↓</span> Download spreadsheet</button></div>
           </div>
           <div id="sourcesBox" class="sources-box" hidden><div class="sources-title"><span>↗</span><div><b>Reference lookups</b><p>Candidate background sources used to check context. Review these before relying on them.</p></div></div><div id="sourceCards" class="source-cards"></div></div>
-          <div class="table-wrap"><table id="quizTable"><caption class="sr-only">Blooket quiz preview, without column headings in the downloaded file</caption><thead><tr><th>Question text</th><th>Answer 1</th><th>Answer 2</th><th>Answer 3</th><th>Answer 4</th><th>Time limit</th><th>Correct answer number</th></tr></thead><tbody id="quizRows"></tbody></table></div>
+          <div class="table-wrap"><table id="quizTable"><caption class="sr-only">Blooket quiz preview</caption><thead><tr><th>Question text</th><th>Answer 1</th><th>Answer 2</th><th>Answer 3</th><th>Answer 4</th><th>Time limit</th><th>Correct answer number</th></tr></thead><tbody id="quizRows"></tbody></table></div>
           <div class="table-footer"><span><span class="table-dot"></span> Gridlines show the exact spreadsheet columns</span><span>300 seconds per question · Correct answer is a number</span></div>
           <div class="results-bottom"><p>Before importing, compare the quiz with your original guide.</p><button id="newQuizButton" type="button" class="text-button">Start over <span>↗</span></button></div>
         </section>
